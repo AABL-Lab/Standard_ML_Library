@@ -9,6 +9,8 @@ from Standard_ML_Library.SAC.discrete.networks import ValueNetwork
 
 from IPython import embed    
 
+torch.autograd.set_detect_anomaly(True)
+
 class DiscreteAgent():
     def __init__(self, alpha=0.0007, beta=0.0007, input_dims=[8],
             env=None, gamma=0.99, n_actions=2, max_size=1000000, tau=0.005,
@@ -44,12 +46,10 @@ class DiscreteAgent():
 
     def choose_action(self, observation):
         state = torch.Tensor([observation]).to(self.actor.device)
-
         actions, _ = self.actor.sample_action(state)
-
-        # actions, _ = self.actor.sample_normal(state, reparameterize=False)
-
-        return actions #actions.cpu().detach().numpy()#[0]
+        return actions
+        # print("Skipping action")
+        # return 0
 
     def remember(self, state, action, reward, new_state, done):
         self.memory.store_transition(state, action, reward, new_state, done)
@@ -101,14 +101,15 @@ class DiscreteAgent():
             state = torch.tensor(state, dtype=torch.float).to(self.actor.device)
             action = torch.tensor(action, dtype=torch.float).to(self.actor.device)
 
-            value = self.value(state).view(-1)
-            value_ = self.target_value(state_).view(-1)
-            value_[done] = 0.0
+            with torch.no_grad():
+                value = self.value(state).view(-1)
+                value_ = self.target_value(state_).view(-1)
+                value_[done] = 0.0
 
             # actions, log_probs = self.actor.sample_normal(state, reparameterize=False)
             # embed()
-            action_values, log_probs = self.actor.forward(state)
-            action_probs = F.softmax(action_values, dim=-1)
+            with torch.no_grad():
+                action_probs, log_probs = self.actor.forward(state)
 
             # log_probs = log_probs.view(-1)
             # q1_new_policy = self.critic_1.forward(state, actions)
@@ -120,53 +121,23 @@ class DiscreteAgent():
             critic_value = torch.min(q1_new_policy, q2_new_policy) 
             # critic_value = critic_value.view(-1)
 
-            self.value.optimizer.zero_grad()
             value_target = critic_value - self.entropy*log_probs
-
             # JSS point (iii) from the discrete sac paper talks about directly computing the expectation. 
             #   It's the likelihood of taking an action in a state multiplied by the value of that s-a pair. Summed over all actions for each state (i think)
             value_expectation = torch.sum(action_probs * value_target, dim=1)
-
             value_loss = 0.5 * F.mse_loss(value, value_expectation)
-            # value_loss = 0.5 * F.mse_loss(value, value_target)
-            self.log("value loss: %f" % value_loss)
+            self.value.optimizer.zero_grad()
 
-            value_loss.backward(retain_graph=True)
-            self.value.optimizer.step()
-
-            # actions, log_probs = self.actor.sample_normal(state, reparameterize=True)
-            # _, log_probs = self.actor.forward(state)
-            # actions, log_action_probs = self.actor.sample_action(state)
-            # log_probs = log_probs.view(-1)
-            # q1_new_policy = self.critic_1.forward(state, actions)
             q1_new_policy = self.critic_1.forward(state)
-            # q2_new_policy = self.critic_2.forward(state, actions)
             q2_new_policy = self.critic_2.forward(state)
             critic_value = torch.min(q1_new_policy, q2_new_policy)
-            # critic_value = critic_value.view(-1)
             
             # JSS (v) directly compute the expectation rather than doing reparameterization to pass the gradients through
             actor_loss = self.entropy*log_probs - critic_value
-            actor_loss = torch.sum(action_probs * actor_loss)
-            self.log("actor loss: %f" % actor_loss)
-
-            # embed()
- 
+            # self.log("actor loss: %f" % actor_loss)
+            actor_loss = torch.mean(torch.sum(action_probs * actor_loss, dim=1))
             self.actor.optimizer.zero_grad()
 
-            # print(torch.max(self.actor.fc1.weight))
-            # print(torch.min(self.actor.fc1.weight))
-            # print(torch.max(self.actor.fc1.weight.grad))
-            # print(torch.min(self.actor.fc1.weight.grad))
-            # print("backward")
-            actor_loss.backward(retain_graph=True)
-            # print(torch.max(self.actor.fc1.weight))
-            # print(torch.min(self.actor.fc1.weight))
-            # print(torch.max(self.actor.fc1.weight.grad))
-            # print(torch.min(self.actor.fc1.weight.grad))
-
-
-            self.actor.optimizer.step()
             
             self.critic_1.optimizer.zero_grad()
             self.critic_2.optimizer.zero_grad()
@@ -180,23 +151,24 @@ class DiscreteAgent():
             critic_1_loss = 0.5 * F.mse_loss(q1_old_policy, q_hat)
             critic_2_loss = 0.5 * F.mse_loss(q2_old_policy, q_hat)
             critic_loss = critic_1_loss + critic_2_loss
-            self.log("critic loss: %f" % critic_loss)
-
-            critic_loss.backward()
-            self.critic_1.optimizer.step()
-            self.critic_2.optimizer.step()
 
             # alpha_loss = -(self.log_alpha * (log_probs + self.target_entropy).detach()).mean()
             # JSS: (iv) similarly to (iii) we directly compute the expectation
             alpha_loss = -(self.log_alpha * (log_probs + self.target_entropy).detach())
             alpha_loss = torch.sum(action_probs * alpha_loss)
-            self.log("alpha loss: %f" % alpha_loss)
-
-            # embed()
-
             self.alpha_optim.zero_grad()
+
+            value_loss.backward(retain_graph=True)
+            actor_loss.backward(retain_graph=True)
+            critic_loss.backward()
             alpha_loss.backward()
+            
+            self.value.optimizer.step()
+            self.actor.optimizer.step()
+            self.critic_1.optimizer.step()
+            self.critic_2.optimizer.step()
             self.alpha_optim.step()
+
             self.entropy = self.log_alpha.exp()
             # print("entropy: %f" % self.entropy)
 
@@ -204,6 +176,8 @@ class DiscreteAgent():
                 self.update_network_parameters()
         else:
             raise NotImplementedError
+
+        return actor_loss.detach().numpy(), value_loss.detach().numpy(), critic_loss.detach().numpy(), alpha_loss.detach().numpy()
 
     def log(self, to_print):
         if (self.verbose):

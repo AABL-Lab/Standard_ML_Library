@@ -6,7 +6,7 @@ import gym_novel_gridworlds
 from gym_novel_gridworlds.wrappers import SaveTrajectories, LimitActions, RandomizeInventory
 from gym_novel_gridworlds.observation_wrappers import LidarInFront, AgentMap
 
-from SAC.discrete.discrete_sac_torch import DiscreteAgent
+from Standard_ML_Library.SAC.discrete.discrete_sac_torch import DiscreteAgent
 
 
 from IPython import embed
@@ -64,10 +64,11 @@ if __name__ == '__main__':
             agent.remember(observation, action, reward, observation_, done)
             if not load_checkpoint:
                 if env_interacts > 1000:
-                    if env_interacts % 128 == 0:
-                        agent.learn(update_params=True)
-                    else:
-                        agent.learn()
+                    # if env_interacts % 128 == 0:
+                    agent.learn(update_params=True)
+                    # else:
+                        # agent.learn()
+
             observation = observation_
             if done: break
             if (load_checkpoint):

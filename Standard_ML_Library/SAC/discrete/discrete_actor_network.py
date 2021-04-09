@@ -49,24 +49,22 @@ class DiscreteActorNetwork(nn.Module):
 
         # action_probs = torch.clamp(action_probs, min=self.reparam_noise, max=1.)
         # embed()
+        action_probs = F.softmax(action_values, dim=-1)
 
         z = action_values == 0.0
         z = z.float() * 1e-8
-        log_action_probabilities = torch.log(action_values + z)
+        log_action_probabilities = torch.log(action_probs + z)
 
         # log_action_probs = torch.log(action_probs)
 
         # print(log_action_probs[0])
         # action_probs = F.softmax(prob)
-        return action_values, log_action_probabilities
+        return action_probs , log_action_probabilities
 
     def sample_action(self, state, reparameterize=False):
-        action_values, log_probs = self.forward(state)
-        # a_idx = torch.argmax(action_probs)
+        action_probs, log_probs = self.forward(state)
 
-        action_probs = F.softmax(action_values, dim=-1)
-
-        a_idx = np.random.choice([i for i in range(5)], p=action_probs.detach().numpy()[0])
+        a_idx = np.random.choice([i for i in range(self.n_actions)], p=action_probs.detach().numpy()[0])
 
         # print(action_probs)
         return a_idx, log_probs
