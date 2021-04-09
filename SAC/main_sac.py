@@ -45,11 +45,11 @@ if __name__ == '__main__':
             score += reward
             agent.remember(observation, action, reward, observation_, done)
             if not load_checkpoint:
-                if env_interacts > 1000:
-                    if env_interacts % 128 == 0:
-                        agent.learn(update_params=True)
-                    else:
-                        agent.learn()
+                #if env_interacts > 1000:
+                    #if env_interacts % 128 == 0:
+                 agent.learn(update_params=True)
+                    #else:
+                        #agent.learn()
             observation = observation_
             #env.render()
         score_history.append(score)
