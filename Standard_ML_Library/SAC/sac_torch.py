@@ -127,7 +127,6 @@ class Agent():
 
             self.value.optimizer.zero_grad()
             value_target = critic_value - self.entropy*log_probs
-            # embed()
             value_loss = 0.5 * F.mse_loss(value, value_target)
             self.log("value loss: %f" % value_loss)
 
@@ -232,6 +231,7 @@ class Agent():
             critic_loss.backward()
             self.critic_1.optimizer.step()
             self.critic_2.optimizer.step()
+
 
             if update_params:
                 self.update_network_parameters()

@@ -1,5 +1,5 @@
 from Standard_ML_Library.SAC.discrete.discrete_actor_network import DiscreteActorNetwork
 from Standard_ML_Library.SAC.discrete.discrete_critic_network import DiscreteCriticNetwork
 from Standard_ML_Library.SAC.discrete.discrete_sac_torch import DiscreteAgent
-from Standard_ML_Library.SAC.discrete.buffer import ReplayBuffer
+from Standard_ML_Library.SAC.discrete.discrete_buffer import DiscreteReplayBuffer
 from Standard_ML_Library.SAC.discrete.networks import ValueNetwork
