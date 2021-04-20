@@ -28,6 +28,7 @@ class DiscreteActorNetwork(nn.Module):
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
         self.fc3 = nn.Linear(self.fc2_dims, self.n_actions)
+        # self.soft = nn.Softmax()
 
         # self.mu = nn.Linear(self.fc2_dims, self.n_actions)
         # self.sigma = nn.Linear(self.fc2_dims, self.n_actions)
@@ -39,21 +40,26 @@ class DiscreteActorNetwork(nn.Module):
         self.to(self.device)
 
     def forward(self, state):
-        prob = F.relu(self.fc1(state))
-        prob = F.relu(self.fc2(prob))
-        action_values = F.relu(self.fc3(prob))
+        prob = F.leaky_relu(self.fc1(state))
+        prob = F.leaky_relu(self.fc2(prob))   
+        action_values = F.leaky_relu(self.fc3(prob))
 
-        action_probs = F.softmax(action_values, dim=-1)
-
-        z = action_values == 0.0
+        # action_probs = self.soft(action_values)
+        action_probs = F.softmax(action_values, dim=1)
+        
+        z = action_probs == 0.0
         z = z.float() * 1e-8
         log_action_probabilities = torch.log(action_probs + z)
 
-        return action_probs , log_action_probabilities
+        # if float("-inf") in log_action_probabilities:
+        #     embed()
+
+        return action_probs , log_action_probabilities, action_values
 
     def sample_action(self, state, reparameterize=False):
         with torch.no_grad():
-            action_probs, log_probs = self.forward(state)
+            action_probs, log_probs, _ = self.forward(state)
+
             a_idx = np.random.choice([i for i in range(self.n_actions)], p=action_probs.detach().numpy()[0])
 
         # print(action_probs)
@@ -62,5 +68,5 @@ class DiscreteActorNetwork(nn.Module):
     def save_checkpoint(self):
         torch.save(self.state_dict(), self.checkpoint_file)
 
-    def load_checkpoint(self):
-        self.load_state_dict(torch.load(self.checkpoint_file))
+    def load_checkpoint(self, suffix=''):
+        self.load_state_dict(torch.load(self.checkpoint_file+suffix))

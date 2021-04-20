@@ -1,5 +1,6 @@
 import os
 import torch 
+import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from Standard_ML_Library.SAC.discrete.discrete_buffer import DiscreteReplayBuffer
@@ -8,6 +9,9 @@ from Standard_ML_Library.SAC.discrete.discrete_critic_network import DiscreteCri
 from Standard_ML_Library.SAC.discrete.networks import ValueNetwork
 
 from IPython import embed    
+
+# from pytorchvis import draw_graph
+from torchviz import make_dot
 
 # torch.autograd.set_detect_anomaly(True)
 
@@ -19,7 +23,7 @@ class DiscreteAgent():
         self.verbose = False
         self.gamma = gamma
         self.tau = tau
-        self.memory = DiscreteReplayBuffer(max_size, input_dims, n_actions)
+        self.memory = DiscreteReplayBuffer(max_size, input_dims)
         self.batch_size = batch_size
         self.n_actions = n_actions
         self.env = env
@@ -41,7 +45,7 @@ class DiscreteAgent():
 
         self.scale = reward_scale
         self.update_network_parameters(tau=1)
-        self.target_entropy = -np.prod(self.env.action_space.shape).astype(np.float32)
+        self.target_entropy = -np.prod(self.env.action_space.shape).astype(np.float32) if env else 0.
         self.log_alpha = torch.zeros(1, requires_grad=True, device="cpu")
         if entr_lr is None:
             self.entr_lr = alpha
@@ -49,6 +53,8 @@ class DiscreteAgent():
             self.entr_lr = entr_lr
         self.alpha_optim = torch.optim.Adam([self.log_alpha], lr=self.entr_lr)
         self.entropy = 1. if not zero_entropy else 0.
+
+        self.created_dot_graphs = True
 
     def choose_action(self, observation):
         state = torch.Tensor([observation]).to(self.actor.device)
@@ -79,29 +85,15 @@ class DiscreteAgent():
 
     def update_network_parameters(self, tau=None):
         self.copy_model_over(self.value, self.target_value, tau)
-        self.copy_model_over(self.critic_1, self.future_value_1)
-        self.copy_model_over(self.critic_2, self.future_value_2)
-        
-        # if tau is None:
-        #     tau = self.tau
-
-        # target_value_params = self.target_value.named_parameters()
-        # value_params = self.value.named_parameters()
-
-        # target_value_state_dict = dict(target_value_params)
-        # value_state_dict = dict(value_params)
-
-        # for name in value_state_dict:
-        #     value_state_dict[name] = tau*value_state_dict[name].clone() + \
-        #             (1-tau)*target_value_state_dict[name].clone()
-
-        # self.target_value.load_state_dict(value_state_dict)
+        self.copy_model_over(self.critic_1, self.future_value_1, tau)
+        self.copy_model_over(self.critic_2, self.future_value_2, tau)
     
     def save_models(self):
-        print('.... saving models ....')
         self.actor.save_checkpoint()
         self.value.save_checkpoint()
         self.target_value.save_checkpoint()
+        self.future_value_1.save_checkpoint()
+        self.future_value_2.save_checkpoint()
         self.critic_1.save_checkpoint()
         self.critic_2.save_checkpoint()
 
@@ -110,6 +102,8 @@ class DiscreteAgent():
         self.actor.load_checkpoint()
         self.value.load_checkpoint()
         self.target_value.load_checkpoint()
+        self.future_value_1.load_checkpoint()
+        self.future_value_2.load_checkpoint()
         self.critic_1.load_checkpoint()
         self.critic_2.load_checkpoint()
 
@@ -117,8 +111,7 @@ class DiscreteAgent():
         # if self.memory.mem_cntr < self.batch_size:
         #     return -1, -1, -1, -1
 
-        self.log("entropy %f" % self.entropy)
-        state, action, reward, new_state, done = \
+        state, action, reward, new_state, done, _ = \
                 self.memory.sample_buffer(self.batch_size)
 
         reward = torch.tensor(reward, dtype=torch.float).to(self.actor.device)
@@ -127,87 +120,111 @@ class DiscreteAgent():
         state = torch.tensor(state, dtype=torch.float).to(self.actor.device)
         action = torch.tensor(action, dtype=torch.float).to(self.actor.device)
 
-        value = self.value(state).view(-1)
-        value_ = self.target_value(state_).view(-1)
-        value_[done] = 0.0
 
-        action_probs, log_probs = self.actor.forward(state)
+        value = self.value(state).flatten()
+        value_ = self.target_value(state_).flatten()
+        value_[done] = 0.0 # by convention the value of the next state after the final state is 0
 
         q1_new_policy = self.critic_1.forward(state)
         q2_new_policy = self.critic_2.forward(state)
 
+        action_probs, log_probs, action_value = self.actor.forward(state)
+        # with torch.no_grad():
         critic_value = torch.min(q1_new_policy, q2_new_policy) 
 
+        self.value.optimizer.zero_grad()
         value_target = critic_value - self.entropy*log_probs
         # JSS point (iii) from the discrete sac paper talks about directly computing the expectation. 
         #   It's the likelihood of taking an action in a state multiplied by the value of that s-a pair. Summed over all actions for each state (i think)
         value_expectation = torch.sum(action_probs * value_target, dim=1)
         value_loss = 0.5 * F.mse_loss(value, value_expectation)
-        self.value.optimizer.zero_grad()
-
-        q1_new_policy = self.critic_1.forward(state)
-        q2_new_policy = self.critic_2.forward(state)
-        critic_value = torch.min(q1_new_policy, q2_new_policy)
+        value_loss.backward(retain_graph=True)
+        self.value.optimizer.step()
+        # value_loss = 0.5 * F.mse_loss(value, value_target)
+        # self.value.optimizer.zero_grad()
+        # value_loss = 0
         
         # JSS (v) directly compute the expectation rather than doing reparameterization to pass the gradients through
+    
+
+        self.actor.optimizer.zero_grad()
         actor_loss = self.entropy*log_probs - critic_value
         actor_loss = torch.mean(torch.sum(action_probs * actor_loss, dim=1))
-        self.actor.optimizer.zero_grad()
+        # actor_loss = F.mse_loss(action_value, critic_value)
+        actor_loss.backward(retain_graph=True)
+        self.actor.optimizer.step()
 
+        # make_dot(actor_loss)
 
-        # q_hat = self.scale*reward + self.gamma*value_
         # Get the discounted expected future reward for each q-state
         with torch.no_grad():
-            action_probs_, log_probs_ = self.actor.forward(state_)
-            q_values_ = torch.min(self.future_value_1.forward(state_), self.future_value_2.forward(state_))
-            qf_ = torch.mul(action_probs_, (q_values_ - self.entropy * log_probs_))
-            qf_ = qf_.sum(dim=1)
-            q_hat = self.scale * reward + self.gamma * qf_
+            # action_probs_, log_probs_, _ = self.actor.forward(state_)
+            # q_values_ = torch.min(self.future_value_1.forward(state_), self.future_value_2.forward(state_))
+            # qf_ = torch.mul(action_probs_, (q_values_ - self.entropy * log_probs_))
+            # qf_ = qf_.sum(dim=1)
+            # qf_[done] = 0.
+            # q_hat = self.scale * reward + self.gamma * qf_
+            q_hat = self.scale * reward + self.gamma * value_
 
-        # embed()
-        q1_old_policy = self.critic_1.forward(state).gather(1, action.long()).view(-1)
-        q2_old_policy = self.critic_2.forward(state).gather(1, action.long()).view(-1)
-
-        # q1_old_policy = torch.sum(action_probs * self.critic_1.forward(state), dim=1)
-        # q2_old_policy = torch.sum(action_probs * self.critic_1.forward(state), dim=1)
-
-        # embed()
-        # with torch.no_grad():
-        #     next_state_action, (action_probabilities, log_action_probabilities), _ = self.produce_action_and_action_info(next_state_batch)
-        #     qf1_next_target = self.critic_target(next_state_batch)
-        #     qf2_next_target = self.critic_target_2(next_state_batch)
-        #     min_qf_next_target = action_probabilities * (torch.min(qf1_next_target, qf2_next_target) - self.alpha * log_action_probabilities)
-        #     min_qf_next_target = min_qf_next_target.sum(dim=1).unsqueeze(-1)
-        #     next_q_value = reward_batch + (1.0 - mask_batch) * self.hyperparameters["discount_rate"] * (min_qf_next_target)
-
-        # qf1 = self.critic_local(state_batch).gather(1, action_batch.long())
-        # qf2 = self.critic_local_2(state_batch).gather(1, action_batch.long())
-
-        # qf1_loss = F.mse_loss(qf1, next_q_value)
-        # qf2_loss = F.mse_loss(qf2, next_q_value)
-
-        # embed()
-        critic_1_loss = 0.5 * F.mse_loss(q1_old_policy, q_hat)
-        critic_2_loss = 0.5 * F.mse_loss(q2_old_policy, q_hat)
-        critic_loss = critic_1_loss + critic_2_loss
         self.critic_1.optimizer.zero_grad()
         self.critic_2.optimizer.zero_grad()
+        q1_new_policy_action_value = q1_new_policy.gather(1, action.long()).view(-1)
+        q2_new_policy_action_value = q2_new_policy.gather(1, action.long()).view(-1)
+
+        # embed()
+        critic_1_loss = 0.5 * F.mse_loss(q1_new_policy_action_value, q_hat)
+        critic_2_loss = 0.5 * F.mse_loss(q2_new_policy_action_value, q_hat)
+        critic_loss = critic_1_loss + critic_2_loss
+
+        critic_loss.backward()
+        self.critic_1.optimizer.step()
+        self.critic_2.optimizer.step()
+        
+        if not self.created_dot_graphs: 
+            make_dot(critic_loss).render('critic_loss.gv', view=True)
+            make_dot(actor_loss).render('actor_loss.gv', view=True)
+            make_dot(value_loss).render('value_loss.gv', view=True)
+            self.created_dot_graphs = True
 
         if (self.auto_entropy):
             # JSS: (iv) similarly to (iii) we directly compute the expectation
-            alpha_loss = -(self.log_alpha * (log_probs + self.target_entropy).detach()) # log_alpha instead of 
-            alpha_loss = torch.mean(torch.sum(log_probs * alpha_loss, dim=1))
             self.alpha_optim.zero_grad()
+            weighted_log_probs = torch.sum(action_probs * log_probs, dim=1) # from authors repo
+            alpha_loss = -(self.log_alpha * (weighted_log_probs + self.target_entropy).detach()).mean() # log_alpha instead of 
+            alpha_loss.backward()
 
-        value_loss.backward(retain_graph=True)
-        actor_loss.backward(retain_graph=True)
-        critic_loss.backward()
-        if (self.auto_entropy): alpha_loss.backward()
+
+        # self.actor.optimizer.zero_grad()
+
+        # watch = [("fc1W", self.actor.fc1.weight),
+        #         ("fc2W", self.actor.fc2.weight),
+        #         ("fc3W", self.actor.fc3.weight),
+        #         ("fc1B", self.actor.fc1.bias),
+        #         ("fc2B", self.actor.fc2.bias),
+        #         ("fc3B", self.actor.fc3.bias)]
+        # a = draw_graph(actor_loss, watch)
+        # embed()
+        # a = draw_graph(actor_loss)
+        # embed()
+        # actor_loss.backward(retain_graph=True)
+        # critic_loss.backward(retain_graph=True)
+        # actor_loss.backward(retain_graph=True)
+        # print("a_loss ", actor_loss)
+        # print(self.actor.fc2.weight.grad)
+        # if abs(torch.sum(self.actor.fc3.weight.grad)) <= 0.:
+        #     print("zero grad")
+        #     embed()
+        # else: print("actor loss ", actor_loss)
+        # critic_loss.backward()
         
-        self.value.optimizer.step()
-        self.actor.optimizer.step()
-        self.critic_1.optimizer.step()
-        self.critic_2.optimizer.step()
+        # embed()
+        
+        # self.actor.optimizer.step()
+
+        # self.critic_1.optimizer.step()
+        # self.critic_2.optimizer.step()
+
+
         if (self.auto_entropy): 
             self.alpha_optim.step()
             self.entropy = self.log_alpha.exp()
@@ -215,8 +232,28 @@ class DiscreteAgent():
         if update_params:
             self.update_network_parameters()
 
+        # losses = [actor_loss.float(), value_loss.float(), critic_loss.float(), alpha_loss.float()]
+
+        # embed()
+        # return actor_loss.detach().numpy(), 0., critic_loss.detach().numpy(), alpha_loss.detach().numpy() if self.auto_entropy else 0
         return actor_loss.detach().numpy(), value_loss.detach().numpy(), critic_loss.detach().numpy(), alpha_loss.detach().numpy() if self.auto_entropy else 0
 
     def log(self, to_print):
         if (self.verbose):
             print(to_print)
+
+
+class StaticDiscreteAgent(DiscreteAgent):
+    def __init__(self):
+        super(StaticDiscreteAgent, self).__init__()
+        self.actor.checkpoint_file += "_saved"
+        self.value.checkpoint_file += "_saved"
+        self.target_value.checkpoint_file += "_saved"
+        self.future_value_1.checkpoint_file += "_saved"
+        self.future_value_2.checkpoint_file += "_saved"
+        self.critic_1.checkpoint_file += "_saved"
+        self.critic_2.checkpoint_file += "_saved"
+
+        self.load_models()
+
+        

@@ -23,6 +23,7 @@ import torch.nn.functional as F
 import numpy as np
 from buffer import ReplayBuffer
 from networks import ActorNetwork, CriticNetwork, ValueNetwork
+from torchviz import make_dot
 
 from IPython import embed
 
@@ -58,6 +59,8 @@ class Agent():
             self.entr_lr = entr_lr
         self.alpha_optim = torch.optim.Adam([self.log_alpha], lr=alpha)
         self.entropy = 0
+
+        self.created_dot_graphs = False
 
     def choose_action(self, observation):
         state = torch.Tensor([observation]).to(self.actor.device)
@@ -116,6 +119,7 @@ class Agent():
 
             value = self.value(state).view(-1)
             value_ = self.target_value(state_).view(-1)
+
             value_[done] = 0.0
 
             actions, log_probs = self.actor.sample_normal(state, reparameterize=False)
@@ -159,11 +163,20 @@ class Agent():
 
             critic_loss = critic_1_loss + critic_2_loss
 
+            
+
             self.log("critic loss: %f" % critic_loss)
+            # make_dot(critic_loss).render('critic_loss.gv', view=True)
 
             critic_loss.backward()
             self.critic_1.optimizer.step()
             self.critic_2.optimizer.step()
+
+            if not self.created_dot_graphs: 
+                make_dot(critic_loss).render('critic_loss.gv', view=True)
+                make_dot(actor_loss).render('actor_loss.gv', view=True)
+                make_dot(value_loss).render('value_loss.gv', view=True)
+                self.created_dot_graphs = True
 
             alpha_loss = -(self.log_alpha * (log_probs + self.target_entropy).detach()).mean()
             self.log("alpha loss: %f" % alpha_loss)

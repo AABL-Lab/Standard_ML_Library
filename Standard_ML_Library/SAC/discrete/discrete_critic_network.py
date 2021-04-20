@@ -31,9 +31,8 @@ class DiscreteCriticNetwork(nn.Module):
         self.to(self.device)
 
     def forward(self, state):
-        action_value = self.fc1(state)
-        action_value = F.relu(action_value)
-        action_value = F.relu(self.fc2(action_value))
+        action_value = F.leaky_relu(self.fc1(state))
+        action_value = F.leaky_relu(self.fc2(action_value))
 
         q_vals = self.q(action_value)
 
