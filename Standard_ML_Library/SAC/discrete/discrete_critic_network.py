@@ -38,8 +38,8 @@ class DiscreteCriticNetwork(nn.Module):
 
         return q_vals
 
-    def save_checkpoint(self):
-        torch.save(self.state_dict(), self.checkpoint_file)
+    def save_checkpoint(self, suffix=''):
+        torch.save(self.state_dict(), self.checkpoint_file+suffix)
 
-    def load_checkpoint(self):
-        self.load_state_dict(torch.load(self.checkpoint_file))
+    def load_checkpoint(self, suffix=''):
+        self.load_state_dict(torch.load(self.checkpoint_file+suffix))

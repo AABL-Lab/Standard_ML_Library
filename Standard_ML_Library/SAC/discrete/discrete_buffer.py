@@ -7,6 +7,7 @@ Any modifiations are made by the AABL Lab.
 """
 
 import numpy as np
+import torch
 from IPython import embed
 
 def get_one_hot(targets, nb_classes):
@@ -14,7 +15,7 @@ def get_one_hot(targets, nb_classes):
     return res.reshape(list(targets.shape)+[nb_classes])
 
 class DiscreteReplayBuffer():
-    def __init__(self, max_size, input_shape):
+    def __init__(self, max_size, input_shape, n_skills=5):
         # self.n_actions = n_actions
         self.mem_size = max_size
         self.mem_cntr = 0
@@ -25,7 +26,8 @@ class DiscreteReplayBuffer():
         self.action_memory = np.zeros((self.mem_size, 1))
         self.reward_memory = np.zeros(self.mem_size)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool)
-        self.skill_memory = np.zeros(self.mem_size, dtype=np.int)
+        self.skill_memory = np.zeros((self.mem_size, n_skills), dtype=np.int)
+        self.n_skills=n_skills
 
     def store_transition(self, state, action, reward, state_, done, skill=None):
         index = self.mem_cntr % self.mem_size
@@ -38,7 +40,8 @@ class DiscreteReplayBuffer():
         self.reward_memory[index] = reward
         self.terminal_memory[index] = done
         if (skill is not None):
-            self.skill_memory[index] = skill
+            self.skill_memory[index] = torch.nn.functional.one_hot(skill, self.n_skills)[0]
+
 
         self.mem_cntr += 1
 

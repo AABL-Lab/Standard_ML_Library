@@ -12,14 +12,14 @@ from IPython import embed
 ## Unlike the continuous version of SAC, we don't need to produce a distribution anymore and can softmax the last layer of the policy network
 ## point (ii) from discrete SAC
 
-class DiscreteActorNetwork(nn.Module):
-    def __init__(self, alpha, input_dims, n_actions, fc1_dims=256, 
-            fc2_dims=256, name='actor', chkpt_dir='tmp/sac'):
-        super(DiscreteActorNetwork, self).__init__()
+class DiscreteSkillNetwork(nn.Module):
+    def __init__(self, alpha, input_dims, n_skills, fc1_dims=256, 
+            fc2_dims=256, name='skill', chkpt_dir='tmp/sac'):
+        super(DiscreteSkillNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
-        self.n_actions = n_actions
+        self.n_skills = n_skills
         self.name = name
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_sac')
@@ -27,7 +27,7 @@ class DiscreteActorNetwork(nn.Module):
 
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
-        self.fc3 = nn.Linear(self.fc2_dims, self.n_actions)
+        self.fc3 = nn.Linear(self.fc2_dims, self.n_skills)
         # self.soft = nn.Softmax()
 
         # self.mu = nn.Linear(self.fc2_dims, self.n_actions)
@@ -42,31 +42,21 @@ class DiscreteActorNetwork(nn.Module):
     def forward(self, state):
         prob = F.leaky_relu(self.fc1(state))
         prob = F.leaky_relu(self.fc2(prob))   
-        action_values = F.leaky_relu(self.fc3(prob))
+        skill_values = F.leaky_relu(self.fc3(prob))
 
         # action_probs = self.soft(action_values)
-        action_probs = F.softmax(action_values, dim=1)
+        skill_probs = F.softmax(skill_values, dim=1)
         
-        z = action_probs == 0.0
+        z = skill_probs == 0.0
         z = z.float() * 1e-8
-        log_action_probabilities = torch.log(action_probs + z)
+        log_skill_probabilities = torch.log(skill_probs + z)
 
         # if float("-inf") in log_action_probabilities:
         #     embed()
 
-        return action_probs , log_action_probabilities, action_values
-
-    def sample_action(self, state, reparameterize=False):
-        with torch.no_grad():
-            action_probs, log_probs, _ = self.forward(state)
-
-            a_idx = np.random.choice([i for i in range(self.n_actions)], p=action_probs.detach().numpy()[0])
-
-        # print(action_probs)
-        return a_idx, log_probs
+        return skill_probs , log_skill_probabilities, skill_values
 
     def save_checkpoint(self, suffix=''):
-        # print("saving to ", self.checkpoint_file+suffix)
         torch.save(self.state_dict(), self.checkpoint_file+suffix)
 
     def load_checkpoint(self, suffix=''):
