@@ -28,7 +28,7 @@ class DiscreteDIAYNAgent():
         self.verbose = False
         self.gamma = gamma
         self.tau = tau
-        self.memory = DiscreteReplayBuffer(max_size, obs_dims)
+        self.memory = DiscreteReplayBuffer(max_size, obs_dims, n_skills)
         self.batch_size = batch_size
         self.n_actions = n_actions
         self.n_skills = n_skills
@@ -130,10 +130,9 @@ class DiscreteDIAYNAgent():
         action = torch.tensor(action, dtype=torch.float).to(self.actor.device)
         skill = torch.tensor(skill, dtype=torch.int).to(self.actor.device)
 
-        state = torch.cat((torch.tensor(obs), skill), dim=1)
-        state_ = torch.cat((torch.tensor(obs_), skill), dim=1) # next state
+        state = torch.cat((obs, skill), dim=1)
+        state_ = torch.cat((obs_, skill), dim=1) # next state
 
-        # embed()
         value = self.value(state).flatten()
         value_ = self.target_value(state_).flatten()
         value_[done] = 0.0 # by convention the value of the next state after the final state is 0
@@ -161,7 +160,7 @@ class DiscreteDIAYNAgent():
         skill_pred_logsftmx = F.log_softmax(skill_pred, 1)
         _, pred_z = torch.max(skill_pred_logsftmx, dim=1, keepdim=True)
         rewards = skill_pred_logsftmx[torch.arange(skill_pred.shape[0]), z_hat] - math.log(1/self.n_skills)
-        rewards = rewards.reshape(-1, 1)
+        # rewards = rewards.reshape(-1, 1)
         skill_loss = self.skill_loss_fnc(skill_pred, z_hat)
         skill_loss.backward()
         self.skill.optimizer.step()
@@ -190,7 +189,6 @@ class DiscreteDIAYNAgent():
         q1_new_policy_action_value = q1_new_policy.gather(1, action.long()).view(-1)
         q2_new_policy_action_value = q2_new_policy.gather(1, action.long()).view(-1)
 
-        # embed()
         critic_1_loss = 0.5 * F.mse_loss(q1_new_policy_action_value, q_hat)
         critic_2_loss = 0.5 * F.mse_loss(q2_new_policy_action_value, q_hat)
         critic_loss = critic_1_loss + critic_2_loss
