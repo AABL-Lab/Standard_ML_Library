@@ -24,7 +24,6 @@ class DiscreteDIAYNAgent():
             entr_lr=None, zero_entropy=False, reparam_noise=1e-6, verbose=False):
         
         input_dims = (obs_dims[0] + n_skills, *obs_dims[1:])
-        print("input dimensions", input_dims)
         self.verbose = False
         self.gamma = gamma
         self.tau = tau
@@ -56,7 +55,7 @@ class DiscreteDIAYNAgent():
         self.scale = reward_scale
         self.update_network_parameters(tau=1)
         self.target_entropy = -np.prod(self.env.action_space.shape).astype(np.float32) if env else 0.
-        self.log_alpha = torch.zeros(1, requires_grad=True, device="cpu")
+        self.log_alpha = torch.zeros(1, requires_grad=True, device=self.actor.device)
         if entr_lr is None:
             self.entr_lr = alpha
         else:
@@ -163,6 +162,7 @@ class DiscreteDIAYNAgent():
         # rewards = rewards.reshape(-1, 1)
         skill_loss = self.skill_loss_fnc(skill_pred, z_hat)
         skill_loss.backward()
+        # embed()
         self.skill.optimizer.step()
 
         self.actor.optimizer.zero_grad()
