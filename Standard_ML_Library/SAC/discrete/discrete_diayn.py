@@ -253,7 +253,7 @@ class DiscreteDIAYNAgent():
 
         # embed()
         # return actor_loss.detach().numpy(), 0., critic_loss.detach().numpy(), alpha_loss.detach().numpy() if self.auto_entropy else 0
-        return actor_loss.detach().numpy(), value_loss.detach().numpy(), critic_loss.detach().numpy(), alpha_loss.detach().numpy() if self.auto_entropy else 0, skill_loss.detach().numpy()
+        return actor_loss.detach().cpu().numpy(), value_loss.detach().cpu().numpy(), critic_loss.detach().cpu().numpy(), alpha_loss.detach().cpu().numpy() if self.auto_entropy else 0, skill_loss.detach().cpu().numpy()
 
     def log(self, to_print):
         if (self.verbose):

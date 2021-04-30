@@ -60,7 +60,7 @@ class DiscreteActorNetwork(nn.Module):
         with torch.no_grad():
             action_probs, log_probs, _ = self.forward(state)
 
-            a_idx = np.random.choice([i for i in range(self.n_actions)], p=action_probs.detach().numpy()[0])
+            a_idx = np.random.choice([i for i in range(self.n_actions)], p=action_probs.detach().cpu().numpy()[0])
 
         # print(action_probs)
         return a_idx, log_probs

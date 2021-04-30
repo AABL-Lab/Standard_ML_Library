@@ -46,7 +46,7 @@ class DiscreteAgent():
         self.scale = reward_scale
         self.update_network_parameters(tau=1)
         self.target_entropy = -np.prod(self.env.action_space.shape).astype(np.float32) if env else 0.
-        self.log_alpha = torch.zeros(1, requires_grad=True, device="cpu")
+        self.log_alpha = torch.zeros(1, requires_grad=True, device=self.actor.device)
         if entr_lr is None:
             self.entr_lr = alpha
         else:
@@ -131,7 +131,6 @@ class DiscreteAgent():
         action_probs, log_probs, action_value = self.actor.forward(state)
         # with torch.no_grad():
         critic_value = torch.min(q1_new_policy, q2_new_policy) 
-
         self.value.optimizer.zero_grad()
         value_target = critic_value - self.entropy*log_probs
         # JSS point (iii) from the discrete sac paper talks about directly computing the expectation. 
@@ -223,7 +222,7 @@ class DiscreteAgent():
         if update_params:
             self.update_network_parameters()
 
-        return actor_loss.detach().numpy(), value_loss.detach().numpy(), critic_loss.detach().numpy(), alpha_loss.detach().numpy() if self.auto_entropy else 0
+        return actor_loss.detach().cpu().numpy(), value_loss.detach().cpu().numpy(), critic_loss.detach().cpu().numpy(), alpha_loss.detach().cpu().numpy() if self.auto_entropy else 0
 
     def log(self, to_print):
         if (self.verbose):
