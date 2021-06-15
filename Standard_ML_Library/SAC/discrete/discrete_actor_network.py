@@ -65,9 +65,14 @@ class DiscreteActorNetwork(nn.Module):
         # print(action_probs)
         return a_idx, log_probs
 
+    # just to provide same interface as stable-baselines3
+    def predict(self, state):
+        return self.sample_action(torch.Tensor(state))
+
     def save_checkpoint(self, suffix=''):
         # print("saving to ", self.checkpoint_file+suffix)
         torch.save(self.state_dict(), self.checkpoint_file+suffix)
 
     def load_checkpoint(self, suffix=''):
+        print("loading from ", self.checkpoint_file+suffix)
         self.load_state_dict(torch.load(self.checkpoint_file+suffix))
