@@ -112,8 +112,8 @@ class DiscreteAgent():
         self.critic_2.load_checkpoint(suffix)
 
     def learn(self, update_params=True):
-        # if self.memory.mem_cntr < self.batch_size:
-        #     return -1, -1, -1, -1
+        if self.memory.mem_cntr < self.batch_size:
+            return -1, -1, -1, -1
 
         state, action, reward, new_state, done, _ = \
                 self.memory.sample_buffer(self.batch_size)
@@ -222,6 +222,7 @@ class DiscreteAgent():
         if (self.auto_entropy): 
             self.alpha_optim.step()
             self.entropy = self.log_alpha.exp() if not self.zero_entropy else 0
+            # print("entropy is now %0.2f" % self.entropy)
 
         if update_params:
             self.update_network_parameters()
