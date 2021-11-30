@@ -23,7 +23,7 @@ import torch.nn.functional as F
 import numpy as np
 from buffer import ReplayBuffer
 from networks import ActorNetwork, CriticNetwork, ValueNetwork
-from torchviz import make_dot
+# from torchviz import make_dot
 
 from IPython import embed
 
