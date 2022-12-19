@@ -18,32 +18,32 @@ class AE(nn.Module):
         self.input_dim = input_dim # Input dimensions of data
 
         self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(input_dim, (input_dim//2)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//2), (input_dim//4)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//4), (input_dim//8)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//8), (input_dim//16)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//16), (input_dim//32)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//32), (input_dim//64))
+            nn.Linear(input_dim, (input_dim//2)),
+            nn.ReLU(),
+            nn.Linear((input_dim//2), (input_dim//4)),
+            nn.ReLU(),
+            nn.Linear((input_dim//4), (input_dim//8)),
+            nn.ReLU(),
+            nn.Linear((input_dim//8), (input_dim//16)),
+            nn.ReLU(),
+            nn.Linear((input_dim//16), (input_dim//32)),
+            nn.ReLU(),
+            nn.Linear((input_dim//32), (input_dim//64))
         )
 
         self.decoder = torch.nn.Sequential(
-            torch.nn.Linear((input_dim//64), (input_dim//32)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//32), (input_dim//16)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//16), (input_dim//8)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//8), (input_dim//4)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//4),  (input_dim//2)),
-            torch.nn.ReLU(),
-            torch.nn.Linear((input_dim//2), input_dim),
-            torch.nn.Sigmoid()
+            nn.Linear((input_dim//64), (input_dim//32)),
+            nn.ReLU(),
+            nn.Linear((input_dim//32), (input_dim//16)),
+            nn.ReLU(),
+            nn.Linear((input_dim//16), (input_dim//8)),
+            nn.ReLU(),
+            nn.Linear((input_dim//8), (input_dim//4)),
+            nn.ReLU(),
+            nn.Linear((input_dim//4),  (input_dim//2)),
+            nn.ReLU(),
+            nn.Linear((input_dim//2), input_dim),
+            nn.Sigmoid()
         )
 
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
