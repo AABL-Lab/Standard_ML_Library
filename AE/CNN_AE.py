@@ -12,12 +12,16 @@ import torch.optim as optim
 import torchvision
 
 class CNN_AE(nn.Module):
+
     def __init__(self, input_dim, channels=1, learning_rate=1e-3):
         super().__init__()
+        #TODO: It might be good to be able to calculate reduction till it hits desired latent space
+        # Perhaps in a loop, etc. but for the sake of initial implementation I have not done this.
 
         self.input_dim = input_dim # Input dimensions of data
         self.channels = channels # Black and white images channel = 1, rgb = 3
 
+        #This "fun" math note can be moved to a readme later
         '''
         NOTE:
         A fun *math* reminder about convolutional layer dimensions!
