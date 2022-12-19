@@ -113,7 +113,7 @@ class CNN_AE(nn.Module):
     
 
 if __name__ == "__main__":
-    model = AE(input_dim=784) # Dimensions of MNIST images flattened (28 x 28 = 784)
+    model = CNN_AE(input_dim=26) # Assume square dimensions for MNIST this is 28 x 28
 
     transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
