@@ -76,7 +76,7 @@ class CNN_AE(nn.Module):
             nn.ConvTranspose2d(input_dim//2, input_dim//4, 5, stride=3, padding=1),  # 5 x 5 x 14 -> 15 x 15 x 7
             nn.ReLU(True),
             nn.ConvTranspose2d(input_dim//4, channels, 2, stride=2, padding=1),  # 15 x 15 x 7 -> 28 x 28 x 1
-            nn.Sigmoid()
+            nn.Tanh()
         )
 
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
