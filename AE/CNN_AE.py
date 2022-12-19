@@ -58,7 +58,7 @@ class CNN_AE(nn.Module):
         Also note that channels just change to what you set them to.
         ''' 
 
-        self.encoder = torch.nn.Sequential(
+        self.encoder = nn.Sequential(
             #I will run through MNIST dataset as example
             # Input: 28 x 28 x 1 (the 1 in question is the number of channels)
             nn.Conv2d(channels, input_dim//2, 3, stride=3, padding=1),  # Input -> Floor[((28-3+2(1))/3)+1] = 10 x 10 x (input_dim = 28 // 2) = 14
@@ -69,7 +69,7 @@ class CNN_AE(nn.Module):
             nn.MaxPool2d(2, stride=1) # 3 x 3 x 7 -> Floor[((3+(2*0)-1*(2-1)-1)/1)+1] = 2 x 2 x 7
         )
 
-        self.decoder = torch.nn.Sequential(
+        self.decoder = nn.Sequential(
             # Input: 2 x 2 x 7
             nn.ConvTranspose2d(input_dim//4, input_dim//2, 3, stride=2),  # Input -> (2-1)*2-2*0+1*(3-1)+0+1 = 5 x 5 x 14
             nn.ReLU(True), # 5 x 5 x 14

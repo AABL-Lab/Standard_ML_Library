@@ -17,7 +17,7 @@ class AE(nn.Module):
 
         self.input_dim = input_dim # Input dimensions of data
 
-        self.encoder = torch.nn.Sequential(
+        self.encoder = nn.Sequential(
             nn.Linear(input_dim, (input_dim//2)),
             nn.ReLU(),
             nn.Linear((input_dim//2), (input_dim//4)),
@@ -31,7 +31,7 @@ class AE(nn.Module):
             nn.Linear((input_dim//32), (input_dim//64))
         )
 
-        self.decoder = torch.nn.Sequential(
+        self.decoder = nn.Sequential(
             nn.Linear((input_dim//64), (input_dim//32)),
             nn.ReLU(),
             nn.Linear((input_dim//32), (input_dim//16)),
