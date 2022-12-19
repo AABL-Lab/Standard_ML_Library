@@ -11,7 +11,7 @@ import torch.optim as optim
 
 import torchvision
 
-class AE(nn.Module):
+class CNN_AE(nn.Module):
     def __init__(self, input_dim, channels=1, learning_rate=1e-3):
         super().__init__()
 
