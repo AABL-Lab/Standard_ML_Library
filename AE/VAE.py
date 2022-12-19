@@ -86,13 +86,13 @@ class VAE(nn.Module):
 
                 kld_weight = 0.1 # NOTE: I know there are ways to calulate this... I just haven't. Forgive me.
                 #TODO: Actually get kld weight the correct way
-                loss = reconstruction_loss + kld_weight * kld_loss
-                loss.backward() # Compute backprop gradients from loss
+                train_loss = reconstruction_loss + kld_weight * kld_loss
+                train_loss.backward() # Compute backprop gradients from loss
                 
                 self.optimizer.step() # Update with computed gradients
                 
                 # Add the mini-batch training loss to epoch loss
-                loss += loss.item()
+                loss += train_loss.item()
             
             # Compute the epoch training loss
             loss = loss / len(train_loader)
